@@ -113,16 +113,43 @@ date,value
 
 ## 📈 Metrics Explained
 
-- **RMSE (Root Mean Square Error)**: Square root of average squared differences
-- **MAE (Mean Absolute Error)**: Average absolute differences
-- **MAPE (Mean Absolute Percentage Error)**: Average percentage error
-- **MSE (Mean Squared Error)**: Average squared differences
+- **RMSE (Root Mean Square Error)**: Square root of average squared differences - penalizes large errors
+- **MAE (Mean Absolute Error)**: Average absolute differences - easy to interpret
+- **MAPE (Mean Absolute Percentage Error)**: Average percentage error - scale-independent
+- **MSE (Mean Squared Error)**: Average squared differences - emphasizes large errors
 
 Lower values indicate better model performance.
 
 ## 🏆 Model Selection
 
 The application automatically recommends the best model based on RMSE (Root Mean Square Error). The model with the lowest RMSE on the test set is highlighted as the recommended model.
+
+## 🎯 Model Characteristics
+
+### SARIMA
+- **Best for**: Data with clear seasonal patterns
+- **Strengths**: Statistical rigor, interpretable parameters
+- **Weaknesses**: Requires stationary data, sensitive to outliers
+
+### Holt-Winters
+- **Best for**: Data with trend and seasonality
+- **Strengths**: Simple, fast, handles multiplicative seasonality
+- **Weaknesses**: Limited flexibility, assumes constant patterns
+
+### TBATS
+- **Best for**: Complex seasonality (multiple seasonal periods)
+- **Strengths**: Handles multiple seasonalities, automatic parameter selection
+- **Weaknesses**: Computationally intensive, can overfit
+
+### Prophet
+- **Best for**: Daily data with strong seasonal patterns and holidays
+- **Strengths**: Robust to missing data, handles outliers well
+- **Weaknesses**: May not work well for sub-daily data
+
+### XGBoost
+- **Best for**: Complex non-linear patterns
+- **Strengths**: Captures complex relationships, handles multiple features
+- **Weaknesses**: Requires feature engineering, less interpretable
 
 ## 🐛 Troubleshooting
 
@@ -139,6 +166,12 @@ The application automatically recommends the best model based on RMSE (Root Mean
 
 4. **Model Failures**: Some models may fail for certain datasets. The app will skip failed models and continue with others.
 
+5. **Prophet Installation Issues**: If Prophet fails to install, you may need to install it separately:
+   ```bash
+   pip install pystan==2.19.1.1
+   pip install prophet
+   ```
+
 ## 📦 Deployment
 
 ### Deploy to Streamlit Cloud
@@ -150,16 +183,37 @@ The application automatically recommends the best model based on RMSE (Root Mean
 
 ### Deploy to Heroku
 
-1. Create a `Procfile`:
-   ```
-   web: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
-   ```
-
+1. Ensure `Procfile` and `setup.sh` are in your repository
 2. Deploy using Heroku CLI:
    ```bash
    heroku create
    git push heroku main
    ```
+
+### Required Files for Deployment
+- `app.py` - Main application
+- `requirements.txt` - Python dependencies
+- `packages.txt` - System dependencies (for Streamlit Cloud)
+- `Procfile` - For Heroku deployment
+- `setup.sh` - Setup script for Heroku
+
+## 📂 Project Structure
+
+```
+forecasting_app/
+│
+├── app.py                 # Main Streamlit application
+├── requirements.txt       # Python dependencies
+├── packages.txt          # System dependencies
+├── README.md             # This file
+├── QUICKSTART.md         # Quick start guide
+├── sample_data.csv       # Sample dataset for testing
+├── Procfile              # Heroku deployment config
+├── setup.sh              # Setup script
+├── .gitignore           # Git ignore file
+└── .streamlit/
+    └── config.toml       # Streamlit configuration
+```
 
 ## 🤝 Contributing
 
@@ -184,6 +238,23 @@ Created with ❤️ for time series forecasting enthusiasts
 ## 📞 Support
 
 For issues, questions, or suggestions, please open an issue on GitHub.
+
+## 🔄 Updates & Roadmap
+
+### Current Version: 1.0.0
+- ✅ 5 forecasting models
+- ✅ Train-test validation
+- ✅ Model comparison
+- ✅ Interactive visualizations
+- ✅ CSV upload/download
+
+### Future Enhancements
+- [ ] Support for multiple time series
+- [ ] Advanced ensemble methods
+- [ ] Automatic hyperparameter tuning
+- [ ] More data preprocessing options
+- [ ] Export to Excel with charts
+- [ ] API endpoint for predictions
 
 ---
 
