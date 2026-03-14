@@ -1,0 +1,12 @@
+# Optional Dependencies for Advanced Models
+# Install only if needed: pip install -r requirements-optional.txt
+
+# Neural Prophet (requires PyTorch)
+neuralprophet>=0.7.0
+
+# LSTM (requires TensorFlow)
+tensorflow>=2.13.0
+keras>=2.13.0
+
+# Note: These are heavy libraries and may take time to install
+# The main app works without these - they will be auto-disabled in UI

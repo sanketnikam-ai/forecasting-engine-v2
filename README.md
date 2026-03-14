@@ -1,6 +1,6 @@
 # Advanced Time Series Forecasting Engine
 
-A comprehensive Python-based forecasting application with **25+ forecasting algorithms** built with Streamlit. Optimized for monthly business data in YYYYMM format.
+A comprehensive Python-based forecasting application with **22+ forecasting algorithms** (25+ with optional models) built with Streamlit. Optimized for monthly business data in YYYYMM format.
 
 ## 🌟 Features
 
@@ -49,7 +49,24 @@ A comprehensive Python-based forecasting application with **25+ forecasting algo
 ## 📋 Requirements
 
 - Python 3.8+
-- See `requirements.txt` for dependencies
+- See `requirements.txt` for core dependencies
+
+### Core Models (Always Available):
+All 22 models work with base installation:
+- Statistical: Naive, ARIMA, SARIMA, Auto ARIMA, Holt-Winters, TBATS, Moving Averages
+- ML: Linear, Random Forest, XGBoost, LightGBM, CatBoost, GBM
+- DL: Facebook Prophet
+
+### Optional Models (Advanced):
+Install separately if needed:
+```bash
+pip install -r requirements-optional.txt
+```
+Adds:
+- Neural Prophet (requires PyTorch)
+- LSTM (requires TensorFlow)
+
+**Note**: Optional models are auto-disabled in UI if not installed. The app works perfectly without them!
 
 ## 🚀 Quick Start
 
@@ -147,19 +164,40 @@ month,sales
 ## 🐛 Troubleshooting
 
 ### Installation Issues:
+
+**Prophet Installation:**
 ```bash
-# If Prophet fails
+# If Prophet fails to install
 pip install pystan==2.19.1.1
 pip install prophet
+```
 
-# If TensorFlow/LSTM fails
-pip install tensorflow==2.13.0
+**Optional Models (Neural Prophet, LSTM):**
+```bash
+# These are OPTIONAL - app works without them
+pip install -r requirements-optional.txt
+
+# If they fail to install, simply skip them
+# They will be auto-disabled in the UI
+```
+
+**CatBoost or LightGBM Issues:**
+```bash
+# Install individually if needed
+pip install catboost
+pip install lightgbm
 ```
 
 ### Model Failures:
-- Some models may fail on certain datasets
-- App will skip failed models and continue
-- At least basic models (Naive, SMA) should work
+- Some models may fail on certain datasets (normal behavior)
+- App will skip failed models and continue with others
+- At least basic models (Naive, SMA, Linear) should always work
+- Check error messages for specific issues
+
+### Memory Issues:
+- Reduce number of selected models
+- Decrease forecast horizon
+- Increase test size to reduce training data
 
 ## 📦 Deployment
 
