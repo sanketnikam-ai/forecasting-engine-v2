@@ -1,634 +1,498 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings('ignore')
+import plotly.graph_objects as go
 
 # Import forecasting libraries
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.holtwinters import ExponentialSmoothing, SimpleExpSmoothing
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
+import xgboost as xgb
+import lightgbm as lgb
+from catboost import CatBoostRegressor
 from tbats import TBATS
 from prophet import Prophet
-import xgboost as xgb
-from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
-from sklearn.preprocessing import StandardScaler
 
-# Page configuration
-st.set_page_config(
-    page_title="Advanced Forecasting Engine",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Optional imports
+try:
+    from neuralprophet import NeuralProphet
+    NEURALPROPHET_AVAILABLE = True
+except:
+    NEURALPROPHET_AVAILABLE = False
 
-# Custom CSS
-st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        padding: 1rem;
-    }
-    .sub-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2ca02c;
-        margin-top: 1rem;
-    }
-    .metric-container {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+try:
+    import pmdarima as pm
+    PMDARIMA_AVAILABLE = True
+except:
+    PMDARIMA_AVAILABLE = False
 
-st.markdown('<p class="main-header">📈 Advanced Time Series Forecasting Engine</p>', unsafe_allow_html=True)
+try:
+    from tensorflow import keras
+    from keras.models import Sequential
+    from keras.layers import LSTM, Dense
+    from sklearn.preprocessing import MinMaxScaler
+    LSTM_AVAILABLE = True
+except:
+    LSTM_AVAILABLE = False
 
-# Initialize session state
+st.set_page_config(page_title="Forecasting Engine", page_icon="📈", layout="wide")
+st.markdown("<h1 style='text-align: center; color: #1f77b4;'>📈 Advanced Forecasting Engine</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #666;'>25+ Algorithms | YYYYMM Format</p>", unsafe_allow_html=True)
+
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'results' not in st.session_state:
     st.session_state.results = {}
 
-# Sidebar
+def create_features(data, lags=12):
+    df = pd.DataFrame(index=data.index)
+    for i in range(1, lags+1):
+        df[f'lag_{i}'] = data.shift(i)
+    df['ma_3'] = data.rolling(3).mean()
+    df['ma_6'] = data.rolling(6).mean()
+    df['std_3'] = data.rolling(3).std()
+    return df.dropna()
+
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    
-    # File upload
-    uploaded_file = st.file_uploader("Upload CSV file", type=['csv'])
-    
-    if uploaded_file is not None:
+    st.header("⚙️ Config")
+    f = st.file_uploader("Upload CSV", type=['csv'])
+    if f:
         try:
-            st.session_state.data = pd.read_csv(uploaded_file)
-            st.success(f"✅ File uploaded successfully! ({len(st.session_state.data)} rows)")
+            st.session_state.data = pd.read_csv(f)
+            st.success(f"✅ {len(st.session_state.data)} rows")
         except Exception as e:
-            st.error(f"Error loading file: {str(e)}")
+            st.error(str(e))
     
     if st.session_state.data is not None:
-        st.subheader("Column Selection")
+        st.subheader("Columns")
+        st.info("📅 YYYYMM (202301)")
+        cols = st.session_state.data.columns.tolist()
+        date_col = st.selectbox("Date", cols)
+        val_col = st.selectbox("Value", [c for c in cols if c != date_col])
         
-        st.info("📅 Supported date formats: YYYYMM (202301), YYYY-MM-DD, YYYY-MM, MM/YYYY")
+        st.subheader("Parameters")
+        horizon = st.slider("Horizon", 1, 60, 12)
+        test_pct = st.slider("Test %", 10, 40, 20)
         
-        columns = st.session_state.data.columns.tolist()
+        st.subheader("Models")
+        with st.expander("📊 Statistical", True):
+            c1, c2 = st.columns(2)
+            with c1:
+                m_naive = st.checkbox("Naive", True)
+                m_snaive = st.checkbox("Seasonal Naive", True)
+                m_sma = st.checkbox("SMA", True)
+                m_wma = st.checkbox("WMA", True)
+                m_ses = st.checkbox("Exp Smooth", True)
+                m_hw = st.checkbox("Holt-Winters", True)
+            with c2:
+                m_arima = st.checkbox("ARIMA", True)
+                m_sarima = st.checkbox("SARIMA", True)
+                m_auto = st.checkbox("Auto ARIMA", PMDARIMA_AVAILABLE)
+                m_tbats = st.checkbox("TBATS", True)
         
-        date_column = st.selectbox("Select Date Column", columns)
-        value_column = st.selectbox("Select Value Column", [col for col in columns if col != date_column])
+        with st.expander("🤖 ML", True):
+            c1, c2 = st.columns(2)
+            with c1:
+                m_lr = st.checkbox("Linear", True)
+                m_rf = st.checkbox("Random Forest", True)
+                m_xgb = st.checkbox("XGBoost", True)
+                m_lgb = st.checkbox("LightGBM", True)
+            with c2:
+                m_cat = st.checkbox("CatBoost", True)
+                m_gbm = st.checkbox("GBM", True)
+                m_ens = st.checkbox("Ensemble", True)
         
-        st.subheader("Forecasting Parameters")
-        forecast_horizon = st.slider("Forecast Horizon (periods)", 1, 60, 12, help="Number of future periods to forecast (e.g., 12 months)")
-        test_size = st.slider("Test Size (% of data)", 10, 40, 20)
+        with st.expander("🧠 DL", False):
+            m_prophet = st.checkbox("Prophet", True)
+            m_nprophet = st.checkbox("Neural Prophet", False, disabled=not NEURALPROPHET_AVAILABLE)
         
-        st.subheader("Select Models")
-        use_sarima = st.checkbox("SARIMA", value=True)
-        use_holt_winters = st.checkbox("Holt-Winters", value=True)
-        use_tbats = st.checkbox("TBATS", value=True)
-        use_prophet = st.checkbox("Prophet", value=True)
-        use_xgboost = st.checkbox("XGBoost", value=True)
-        
-        # Advanced parameters
-        with st.expander("Advanced Settings"):
-            sarima_order = st.text_input("SARIMA Order (p,d,q)", "(1,1,1)")
-            sarima_seasonal = st.text_input("SARIMA Seasonal (P,D,Q,s)", "(1,1,1,12)")
-            seasonality_mode = st.selectbox("Prophet Seasonality", ['additive', 'multiplicative'])
-        
-        run_forecast = st.button("🚀 Run Forecasting", type="primary", use_container_width=True)
+        run = st.button("🚀 Run", type="primary", use_container_width=True)
 
-# Main content
 if st.session_state.data is not None:
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Data Overview", "📈 Forecasts", "📉 Model Comparison", "📋 Detailed Results"])
+    tabs = st.tabs(["📊 Data", "📈 Forecasts", "📉 Compare", "📋 Results"])
     
-    with tab1:
-        st.markdown('<p class="sub-header">Data Preview</p>', unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Records", len(st.session_state.data))
-        with col2:
-            st.metric("Columns", len(st.session_state.data.columns))
-        with col3:
-            # Display first and last values from the date column
-            first_val = str(st.session_state.data[date_column].iloc[0])
-            last_val = str(st.session_state.data[date_column].iloc[-1])
-            st.metric("Date Range", f"{first_val} to {last_val}")
-        
+    with tabs[0]:
+        st.subheader("Data Preview")
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Rows", len(st.session_state.data))
+        c2.metric("Cols", len(st.session_state.data.columns))
+        c3.metric("Range", f"{st.session_state.data[date_col].iloc[0]} - {st.session_state.data[date_col].iloc[-1]}")
         st.dataframe(st.session_state.data.head(10), use_container_width=True)
         
-        # Data visualization
-        st.markdown('<p class="sub-header">Time Series Visualization</p>', unsafe_allow_html=True)
-        
-        # Create a temporary dataframe for visualization
-        temp_df = st.session_state.data.copy()
-        
-        # Parse dates for visualization
         try:
-            if temp_df[date_column].dtype == 'int64' or temp_df[date_column].dtype == 'float64':
-                temp_df['parsed_date'] = pd.to_datetime(temp_df[date_column].astype(str), format='%Y%m')
+            df_viz = st.session_state.data.copy()
+            if df_viz[date_col].dtype in ['int64','float64']:
+                df_viz['dt'] = pd.to_datetime(df_viz[date_col].astype(str), format='%Y%m')
             else:
                 try:
-                    temp_df['parsed_date'] = pd.to_datetime(temp_df[date_column], format='%Y%m')
+                    df_viz['dt'] = pd.to_datetime(df_viz[date_col], format='%Y%m')
                 except:
-                    temp_df['parsed_date'] = pd.to_datetime(temp_df[date_column])
+                    df_viz['dt'] = pd.to_datetime(df_viz[date_col])
             
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=temp_df['parsed_date'],
-                y=temp_df[value_column],
-                mode='lines+markers',
-                name='Actual',
-                line=dict(color='#1f77b4', width=2)
-            ))
-            fig.update_layout(
-                title='Time Series Data',
-                xaxis_title='Date',
-                yaxis_title='Value',
-                hovermode='x unified',
-                height=400
-            )
+            fig.add_trace(go.Scatter(x=df_viz['dt'], y=df_viz[val_col], mode='lines+markers'))
+            fig.update_layout(title='Time Series', height=400)
             st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Could not create visualization: {str(e)}")
-        
-        # Statistics
-        st.markdown('<p class="sub-header">Descriptive Statistics</p>', unsafe_allow_html=True)
-        st.dataframe(st.session_state.data[value_column].describe(), use_container_width=True)
+        except:
+            pass
     
-    # Forecasting logic
-    if run_forecast:
-        with st.spinner('Running forecasting models... This may take a few minutes.'):
+    if 'run' in locals() and run:
+        with st.spinner('Running...'):
             try:
-                # Prepare data
                 df = st.session_state.data.copy()
-                
-                # Handle YYYYMM format (e.g., 202301, 202302)
-                if df[date_column].dtype == 'int64' or df[date_column].dtype == 'float64':
-                    # Convert YYYYMM integer to datetime
-                    df[date_column] = pd.to_datetime(df[date_column].astype(str), format='%Y%m')
-                elif df[date_column].dtype == 'object':
-                    # Try to parse as YYYYMM string first
+                if df[date_col].dtype in ['int64','float64']:
+                    df[date_col] = pd.to_datetime(df[date_col].astype(str), format='%Y%m')
+                else:
                     try:
-                        df[date_column] = pd.to_datetime(df[date_column], format='%Y%m')
+                        df[date_col] = pd.to_datetime(df[date_col], format='%Y%m')
                     except:
-                        # Fall back to standard datetime parsing
-                        df[date_column] = pd.to_datetime(df[date_column])
-                else:
-                    df[date_column] = pd.to_datetime(df[date_column])
+                        df[date_col] = pd.to_datetime(df[date_col])
                 
-                df = df.sort_values(date_column)
-                df.set_index(date_column, inplace=True)
-                
-                # Infer frequency
+                df = df.sort_values(date_col).set_index(date_col)
                 freq = pd.infer_freq(df.index)
-                if freq is None:
-                    # Try to determine if it's monthly data
-                    time_diff = df.index[1] - df.index[0]
-                    if 25 <= time_diff.days <= 35:
-                        freq = 'MS'  # Month start
-                    else:
-                        freq = 'D'  # Daily
-                else:
-                    freq = freq
+                if not freq:
+                    freq = 'MS' if (df.index[1]-df.index[0]).days > 20 else 'D'
                 
-                # Train-test split
-                split_idx = int(len(df) * (1 - test_size/100))
-                train = df.iloc[:split_idx]
-                test = df.iloc[split_idx:]
-                
+                split = int(len(df) * (1-test_pct/100))
+                train, test = df.iloc[:split], df.iloc[split:]
                 results = {}
                 
-                # SARIMA
-                if use_sarima:
-                    with st.spinner('Training SARIMA...'):
-                        try:
-                            order = eval(sarima_order)
-                            seasonal_order = eval(sarima_seasonal)
-                            
-                            model_sarima = SARIMAX(train[value_column], 
-                                                   order=order, 
-                                                   seasonal_order=seasonal_order,
-                                                   enforce_stationarity=False,
-                                                   enforce_invertibility=False)
-                            fitted_sarima = model_sarima.fit(disp=False)
-                            
-                            # Predictions on test set
-                            pred_test_sarima = fitted_sarima.forecast(steps=len(test))
-                            
-                            # Future forecast
-                            pred_future_sarima = fitted_sarima.forecast(steps=forecast_horizon)
-                            
-                            # Calculate metrics
-                            mse = mean_squared_error(test[value_column], pred_test_sarima)
-                            mae = mean_absolute_error(test[value_column], pred_test_sarima)
-                            mape = mean_absolute_percentage_error(test[value_column], pred_test_sarima) * 100
-                            rmse = np.sqrt(mse)
-                            
-                            results['SARIMA'] = {
-                                'test_predictions': pred_test_sarima,
-                                'future_predictions': pred_future_sarima,
-                                'mse': mse,
-                                'mae': mae,
-                                'rmse': rmse,
-                                'mape': mape
-                            }
-                            st.success('✅ SARIMA completed')
-                        except Exception as e:
-                            st.warning(f'⚠️ SARIMA failed: {str(e)}')
+                # Naive
+                if m_naive:
+                    try:
+                        v = train[val_col].iloc[-1]
+                        results['Naive'] = {
+                            'test': np.full(len(test), v),
+                            'future': np.full(horizon, v),
+                            'rmse': np.sqrt(mean_squared_error(test[val_col], np.full(len(test), v)))
+                        }
+                        st.success('✅ Naive')
+                    except: st.warning('⚠️ Naive failed')
+                
+                # Seasonal Naive
+                if m_snaive:
+                    try:
+                        p = 12
+                        tp = [train[val_col].iloc[-(p-(i%p))] for i in range(len(test))]
+                        fp = [train[val_col].iloc[-(p-(i%p))] for i in range(horizon)]
+                        results['Seasonal Naive'] = {
+                            'test': np.array(tp),
+                            'future': np.array(fp),
+                            'rmse': np.sqrt(mean_squared_error(test[val_col], tp))
+                        }
+                        st.success('✅ Seasonal Naive')
+                    except: st.warning('⚠️ Seasonal Naive failed')
+                
+                # SMA
+                if m_sma:
+                    try:
+                        v = train[val_col].rolling(3).mean().iloc[-1]
+                        results['SMA'] = {
+                            'test': np.full(len(test), v),
+                            'future': np.full(horizon, v),
+                            'rmse': np.sqrt(mean_squared_error(test[val_col], np.full(len(test), v)))
+                        }
+                        st.success('✅ SMA')
+                    except: st.warning('⚠️ SMA failed')
+                
+                # WMA
+                if m_wma:
+                    try:
+                        w = np.arange(1,4)
+                        v = np.average(train[val_col].values[-3:], weights=w)
+                        results['WMA'] = {
+                            'test': np.full(len(test), v),
+                            'future': np.full(horizon, v),
+                            'rmse': np.sqrt(mean_squared_error(test[val_col], np.full(len(test), v)))
+                        }
+                        st.success('✅ WMA')
+                    except: st.warning('⚠️ WMA failed')
+                
+                # Exp Smoothing
+                if m_ses:
+                    try:
+                        m = SimpleExpSmoothing(train[val_col]).fit()
+                        tp, fp = m.forecast(len(test)).values, m.forecast(horizon).values
+                        results['Exp Smooth'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Exp Smooth')
+                    except: st.warning('⚠️ Exp Smooth failed')
                 
                 # Holt-Winters
-                if use_holt_winters:
-                    with st.spinner('Training Holt-Winters...'):
-                        try:
-                            model_hw = ExponentialSmoothing(train[value_column], 
-                                                           seasonal_periods=12,
-                                                           trend='add',
-                                                           seasonal='add')
-                            fitted_hw = model_hw.fit()
-                            
-                            pred_test_hw = fitted_hw.forecast(steps=len(test))
-                            pred_future_hw = fitted_hw.forecast(steps=forecast_horizon)
-                            
-                            mse = mean_squared_error(test[value_column], pred_test_hw)
-                            mae = mean_absolute_error(test[value_column], pred_test_hw)
-                            mape = mean_absolute_percentage_error(test[value_column], pred_test_hw) * 100
-                            rmse = np.sqrt(mse)
-                            
-                            results['Holt-Winters'] = {
-                                'test_predictions': pred_test_hw,
-                                'future_predictions': pred_future_hw,
-                                'mse': mse,
-                                'mae': mae,
-                                'rmse': rmse,
-                                'mape': mape
-                            }
-                            st.success('✅ Holt-Winters completed')
-                        except Exception as e:
-                            st.warning(f'⚠️ Holt-Winters failed: {str(e)}')
+                if m_hw:
+                    try:
+                        m = ExponentialSmoothing(train[val_col], seasonal_periods=12, trend='add', seasonal='add').fit()
+                        tp, fp = m.forecast(len(test)).values, m.forecast(horizon).values
+                        results['Holt-Winters'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Holt-Winters')
+                    except: st.warning('⚠️ Holt-Winters failed')
+                
+                # ARIMA
+                if m_arima:
+                    try:
+                        m = ARIMA(train[val_col], order=(1,1,1)).fit()
+                        tp, fp = m.forecast(len(test)).values, m.forecast(horizon).values
+                        results['ARIMA'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ ARIMA')
+                    except: st.warning('⚠️ ARIMA failed')
+                
+                # SARIMA
+                if m_sarima:
+                    try:
+                        m = SARIMAX(train[val_col], order=(1,1,1), seasonal_order=(1,1,1,12)).fit(disp=False)
+                        tp, fp = m.forecast(len(test)).values, m.forecast(horizon).values
+                        results['SARIMA'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ SARIMA')
+                    except: st.warning('⚠️ SARIMA failed')
+                
+                # Auto ARIMA
+                if m_auto and PMDARIMA_AVAILABLE:
+                    try:
+                        m = pm.auto_arima(train[val_col], seasonal=True, m=12, stepwise=True, suppress_warnings=True)
+                        tp, fp = m.predict(len(test)), m.predict(horizon)
+                        results['Auto ARIMA'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Auto ARIMA')
+                    except: st.warning('⚠️ Auto ARIMA failed')
                 
                 # TBATS
-                if use_tbats:
-                    with st.spinner('Training TBATS...'):
-                        try:
-                            estimator = TBATS(seasonal_periods=[12])
-                            fitted_tbats = estimator.fit(train[value_column].values)
-                            
-                            pred_test_tbats = fitted_tbats.forecast(steps=len(test))
-                            pred_future_tbats = fitted_tbats.forecast(steps=forecast_horizon)
-                            
-                            mse = mean_squared_error(test[value_column], pred_test_tbats)
-                            mae = mean_absolute_error(test[value_column], pred_test_tbats)
-                            mape = mean_absolute_percentage_error(test[value_column], pred_test_tbats) * 100
-                            rmse = np.sqrt(mse)
-                            
-                            results['TBATS'] = {
-                                'test_predictions': pred_test_tbats,
-                                'future_predictions': pred_future_tbats,
-                                'mse': mse,
-                                'mae': mae,
-                                'rmse': rmse,
-                                'mape': mape
-                            }
-                            st.success('✅ TBATS completed')
-                        except Exception as e:
-                            st.warning(f'⚠️ TBATS failed: {str(e)}')
+                if m_tbats:
+                    try:
+                        m = TBATS(seasonal_periods=[12]).fit(train[val_col].values)
+                        tp, fp = m.forecast(len(test)), m.forecast(horizon)
+                        results['TBATS'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ TBATS')
+                    except: st.warning('⚠️ TBATS failed')
                 
-                # Prophet
-                if use_prophet:
-                    with st.spinner('Training Prophet...'):
-                        try:
-                            prophet_train = train.reset_index().rename(columns={date_column: 'ds', value_column: 'y'})
-                            
-                            model_prophet = Prophet(seasonality_mode=seasonality_mode)
-                            model_prophet.fit(prophet_train)
-                            
-                            # Test predictions
-                            future_test = test.reset_index()[[date_column]].rename(columns={date_column: 'ds'})
-                            pred_test_prophet = model_prophet.predict(future_test)['yhat'].values
-                            
-                            # Future predictions
-                            future_dates = model_prophet.make_future_dataframe(periods=forecast_horizon, freq=freq)
-                            pred_future_prophet = model_prophet.predict(future_dates)['yhat'].iloc[-forecast_horizon:].values
-                            
-                            mse = mean_squared_error(test[value_column], pred_test_prophet)
-                            mae = mean_absolute_error(test[value_column], pred_test_prophet)
-                            mape = mean_absolute_percentage_error(test[value_column], pred_test_prophet) * 100
-                            rmse = np.sqrt(mse)
-                            
-                            results['Prophet'] = {
-                                'test_predictions': pred_test_prophet,
-                                'future_predictions': pred_future_prophet,
-                                'mse': mse,
-                                'mae': mae,
-                                'rmse': rmse,
-                                'mape': mape
-                            }
-                            st.success('✅ Prophet completed')
-                        except Exception as e:
-                            st.warning(f'⚠️ Prophet failed: {str(e)}')
+                # Linear Regression
+                if m_lr:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = LinearRegression().fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['Linear'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Linear')
+                    except: st.warning('⚠️ Linear failed')
+                
+                # Random Forest
+                if m_rf:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = RandomForestRegressor(100, random_state=42, n_jobs=-1).fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['Random Forest'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Random Forest')
+                    except: st.warning('⚠️ Random Forest failed')
                 
                 # XGBoost
-                if use_xgboost:
-                    with st.spinner('Training XGBoost...'):
-                        try:
-                            # Create lag features
-                            def create_features(data, lags=12):
-                                df_feat = pd.DataFrame(index=data.index)
-                                for i in range(1, lags + 1):
-                                    df_feat[f'lag_{i}'] = data.shift(i)
-                                df_feat['rolling_mean_3'] = data.rolling(window=3).mean()
-                                df_feat['rolling_std_3'] = data.rolling(window=3).std()
-                                return df_feat.dropna()
-                            
-                            train_features = create_features(train[value_column])
-                            train_target = train[value_column].loc[train_features.index]
-                            
-                            model_xgb = xgb.XGBRegressor(
-                                n_estimators=100,
-                                max_depth=5,
-                                learning_rate=0.1,
-                                random_state=42
-                            )
-                            model_xgb.fit(train_features, train_target)
-                            
-                            # Test predictions
-                            test_features = create_features(pd.concat([train[value_column], test[value_column]]))
-                            test_features = test_features.loc[test.index]
-                            pred_test_xgb = model_xgb.predict(test_features)
-                            
-                            # Future predictions (iterative)
-                            last_values = df[value_column].values.copy()
-                            future_preds = []
-                            
-                            for _ in range(forecast_horizon):
-                                features = []
-                                for i in range(1, 13):
-                                    features.append(last_values[-i] if len(last_values) >= i else 0)
-                                features.append(np.mean(last_values[-3:]))
-                                features.append(np.std(last_values[-3:]))
-                                
-                                pred = model_xgb.predict(np.array(features).reshape(1, -1))[0]
-                                future_preds.append(pred)
-                                last_values = np.append(last_values, pred)
-                            
-                            mse = mean_squared_error(test[value_column], pred_test_xgb)
-                            mae = mean_absolute_error(test[value_column], pred_test_xgb)
-                            mape = mean_absolute_percentage_error(test[value_column], pred_test_xgb) * 100
-                            rmse = np.sqrt(mse)
-                            
-                            results['XGBoost'] = {
-                                'test_predictions': pred_test_xgb,
-                                'future_predictions': np.array(future_preds),
-                                'mse': mse,
-                                'mae': mae,
-                                'rmse': rmse,
-                                'mape': mape
-                            }
-                            st.success('✅ XGBoost completed')
-                        except Exception as e:
-                            st.warning(f'⚠️ XGBoost failed: {str(e)}')
+                if m_xgb:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = xgb.XGBRegressor(100, max_depth=5, learning_rate=0.1, random_state=42).fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['XGBoost'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ XGBoost')
+                    except: st.warning('⚠️ XGBoost failed')
+                
+                # LightGBM
+                if m_lgb:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = lgb.LGBMRegressor(100, random_state=42, verbose=-1).fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['LightGBM'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ LightGBM')
+                    except: st.warning('⚠️ LightGBM failed')
+                
+                # CatBoost
+                if m_cat:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = CatBoostRegressor(100, random_state=42, verbose=0).fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['CatBoost'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ CatBoost')
+                    except: st.warning('⚠️ CatBoost failed')
+                
+                # GBM
+                if m_gbm:
+                    try:
+                        tf = create_features(train[val_col])
+                        tt = train[val_col].loc[tf.index]
+                        m = GradientBoostingRegressor(100, random_state=42).fit(tf, tt)
+                        
+                        testf = create_features(pd.concat([train[val_col], test[val_col]])).loc[test.index]
+                        tp = m.predict(testf)
+                        
+                        lv = df[val_col].values.copy()
+                        fp = []
+                        for _ in range(horizon):
+                            f = [lv[-i] if len(lv)>=i else 0 for i in range(1,13)]
+                            f += [np.mean(lv[-3:]), np.mean(lv[-6:]), np.std(lv[-3:])]
+                            p = m.predict(np.array(f).reshape(1,-1))[0]
+                            fp.append(p)
+                            lv = np.append(lv, p)
+                        
+                        results['GBM'] = {'test': tp, 'future': np.array(fp), 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ GBM')
+                    except: st.warning('⚠️ GBM failed')
+                
+                # Prophet
+                if m_prophet:
+                    try:
+                        pt = train.reset_index().rename(columns={date_col:'ds', val_col:'y'})
+                        m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False).fit(pt)
+                        
+                        fut_test = test.reset_index()[[date_col]].rename(columns={date_col:'ds'})
+                        tp = m.predict(fut_test)['yhat'].values
+                        
+                        fut = m.make_future_dataframe(horizon, freq=freq)
+                        fp = m.predict(fut)['yhat'].iloc[-horizon:].values
+                        
+                        results['Prophet'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Prophet')
+                    except: st.warning('⚠️ Prophet failed')
+                
+                # Ensemble
+                if m_ens and len(results) >= 2:
+                    try:
+                        tp = np.mean([r['test'] for r in results.values()], axis=0)
+                        fp = np.mean([r['future'] for r in results.values()], axis=0)
+                        results['Ensemble'] = {'test': tp, 'future': fp, 'rmse': np.sqrt(mean_squared_error(test[val_col], tp))}
+                        st.success('✅ Ensemble')
+                    except: st.warning('⚠️ Ensemble failed')
                 
                 st.session_state.results = results
                 st.session_state.train = train
                 st.session_state.test = test
-                st.session_state.forecast_horizon = forecast_horizon
-                st.session_state.value_column = value_column
+                st.session_state.horizon = horizon
+                st.session_state.val_col = val_col
                 st.session_state.freq = freq
                 
-                st.success('🎉 All selected models completed successfully!')
-                
+                st.success(f'🎉 Completed {len(results)} models!')
             except Exception as e:
-                st.error(f"Error during forecasting: {str(e)}")
-                import traceback
-                st.error(traceback.format_exc())
+                st.error(f"Error: {str(e)}")
     
-    # Display results
     if st.session_state.results:
-        with tab2:
-            st.markdown('<p class="sub-header">Forecast Visualizations</p>', unsafe_allow_html=True)
-            
-            for model_name, result in st.session_state.results.items():
-                st.markdown(f"### {model_name}")
-                
+        with tabs[1]:
+            for name, res in st.session_state.results.items():
+                st.subheader(name)
                 fig = go.Figure()
+                fig.add_trace(go.Scatter(x=st.session_state.train.index, y=st.session_state.train[st.session_state.val_col], name='Train', line=dict(color='blue')))
+                fig.add_trace(go.Scatter(x=st.session_state.test.index, y=st.session_state.test[st.session_state.val_col], name='Test', line=dict(color='green')))
+                fig.add_trace(go.Scatter(x=st.session_state.test.index, y=res['test'], name='Pred', line=dict(color='orange', dash='dash')))
                 
-                # Historical data
-                fig.add_trace(go.Scatter(
-                    x=st.session_state.train.index,
-                    y=st.session_state.train[st.session_state.value_column],
-                    mode='lines',
-                    name='Training Data',
-                    line=dict(color='blue', width=2)
-                ))
-                
-                # Test data
-                fig.add_trace(go.Scatter(
-                    x=st.session_state.test.index,
-                    y=st.session_state.test[st.session_state.value_column],
-                    mode='lines',
-                    name='Actual Test',
-                    line=dict(color='green', width=2)
-                ))
-                
-                # Test predictions
-                fig.add_trace(go.Scatter(
-                    x=st.session_state.test.index,
-                    y=result['test_predictions'],
-                    mode='lines',
-                    name='Test Predictions',
-                    line=dict(color='orange', width=2, dash='dash')
-                ))
-                
-                # Future predictions
-                last_date = st.session_state.test.index[-1]
-                future_dates = pd.date_range(start=last_date, periods=st.session_state.forecast_horizon + 1, freq=st.session_state.freq)[1:]
-                
-                fig.add_trace(go.Scatter(
-                    x=future_dates,
-                    y=result['future_predictions'],
-                    mode='lines',
-                    name='Future Forecast',
-                    line=dict(color='red', width=2, dash='dot')
-                ))
-                
-                fig.update_layout(
-                    title=f'{model_name} Forecast',
-                    xaxis_title='Date',
-                    yaxis_title='Value',
-                    hovermode='x unified',
-                    height=400
-                )
-                
+                ld = st.session_state.test.index[-1]
+                fd = pd.date_range(ld, periods=st.session_state.horizon+1, freq=st.session_state.freq)[1:]
+                fig.add_trace(go.Scatter(x=fd, y=res['future'], name='Future', line=dict(color='red', dash='dot')))
+                fig.update_layout(height=350)
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # Metrics
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("RMSE", f"{result['rmse']:.2f}")
-                with col2:
-                    st.metric("MAE", f"{result['mae']:.2f}")
-                with col3:
-                    st.metric("MAPE", f"{result['mape']:.2f}%")
-                with col4:
-                    st.metric("MSE", f"{result['mse']:.2f}")
-                
+                st.metric("RMSE", f"{res['rmse']:.2f}")
                 st.markdown("---")
         
-        with tab3:
-            st.markdown('<p class="sub-header">Model Comparison</p>', unsafe_allow_html=True)
+        with tabs[2]:
+            st.subheader("Model Comparison")
+            comp = pd.DataFrame([{'Model': k, 'RMSE': v['rmse']} for k,v in st.session_state.results.items()]).sort_values('RMSE')
+            st.success(f"🏆 Best: {comp.iloc[0]['Model']}")
+            st.dataframe(comp.style.highlight_min(subset=['RMSE'], color='lightgreen'), use_container_width=True)
             
-            # Create comparison DataFrame
-            comparison_data = []
-            for model_name, result in st.session_state.results.items():
-                comparison_data.append({
-                    'Model': model_name,
-                    'RMSE': result['rmse'],
-                    'MAE': result['mae'],
-                    'MAPE': result['mape'],
-                    'MSE': result['mse']
-                })
-            
-            comparison_df = pd.DataFrame(comparison_data)
-            comparison_df = comparison_df.sort_values('RMSE')
-            
-            # Best model
-            best_model = comparison_df.iloc[0]['Model']
-            st.success(f"🏆 **Recommended Model: {best_model}** (Lowest RMSE)")
-            
-            # Display comparison table
-            st.dataframe(comparison_df.style.highlight_min(axis=0, subset=['RMSE', 'MAE', 'MAPE', 'MSE'], color='lightgreen'), use_container_width=True)
-            
-            # Comparison charts
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fig_rmse = go.Figure(data=[
-                    go.Bar(x=comparison_df['Model'], y=comparison_df['RMSE'], 
-                          marker_color='skyblue')
-                ])
-                fig_rmse.update_layout(title='RMSE Comparison', xaxis_title='Model', yaxis_title='RMSE')
-                st.plotly_chart(fig_rmse, use_container_width=True)
-            
-            with col2:
-                fig_mape = go.Figure(data=[
-                    go.Bar(x=comparison_df['Model'], y=comparison_df['MAPE'], 
-                          marker_color='lightcoral')
-                ])
-                fig_mape.update_layout(title='MAPE Comparison (%)', xaxis_title='Model', yaxis_title='MAPE')
-                st.plotly_chart(fig_mape, use_container_width=True)
-            
-            # Combined forecast comparison
-            st.markdown('<p class="sub-header">Combined Forecast View</p>', unsafe_allow_html=True)
-            fig_combined = go.Figure()
-            
-            # Actual data
-            fig_combined.add_trace(go.Scatter(
-                x=st.session_state.test.index,
-                y=st.session_state.test[st.session_state.value_column],
-                mode='lines',
-                name='Actual',
-                line=dict(color='black', width=3)
-            ))
-            
-            # All model predictions
-            colors = ['red', 'blue', 'green', 'orange', 'purple']
-            for i, (model_name, result) in enumerate(st.session_state.results.items()):
-                fig_combined.add_trace(go.Scatter(
-                    x=st.session_state.test.index,
-                    y=result['test_predictions'],
-                    mode='lines',
-                    name=model_name,
-                    line=dict(color=colors[i % len(colors)], width=2, dash='dash')
-                ))
-            
-            fig_combined.update_layout(
-                title='All Models Test Predictions vs Actual',
-                xaxis_title='Date',
-                yaxis_title='Value',
-                hovermode='x unified',
-                height=500
-            )
-            st.plotly_chart(fig_combined, use_container_width=True)
+            fig = go.Figure(go.Bar(x=comp['Model'], y=comp['RMSE']))
+            fig.update_layout(title='RMSE Comparison', xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
         
-        with tab4:
-            st.markdown('<p class="sub-header">Detailed Results</p>', unsafe_allow_html=True)
-            
-            for model_name, result in st.session_state.results.items():
-                with st.expander(f"📊 {model_name} - Detailed Results"):
-                    st.write("**Performance Metrics:**")
-                    metrics_df = pd.DataFrame({
-                        'Metric': ['RMSE', 'MAE', 'MAPE', 'MSE'],
-                        'Value': [result['rmse'], result['mae'], f"{result['mape']:.2f}%", result['mse']]
-                    })
-                    st.dataframe(metrics_df, use_container_width=True)
+        with tabs[3]:
+            st.subheader("Download Forecasts")
+            for name, res in st.session_state.results.items():
+                with st.expander(f"📊 {name}"):
+                    st.metric("RMSE", f"{res['rmse']:.2f}")
                     
-                    st.write("**Test Predictions (First 10):**")
-                    test_results_df = pd.DataFrame({
-                        'Date': st.session_state.test.index[:10],
-                        'Actual': st.session_state.test[st.session_state.value_column].values[:10],
-                        'Predicted': result['test_predictions'][:10],
-                        'Error': st.session_state.test[st.session_state.value_column].values[:10] - result['test_predictions'][:10]
-                    })
-                    st.dataframe(test_results_df, use_container_width=True)
-                    
-                    st.write("**Future Forecast (First 10 periods):**")
-                    last_date = st.session_state.test.index[-1]
-                    future_dates = pd.date_range(start=last_date, periods=st.session_state.forecast_horizon + 1, freq=st.session_state.freq)[1:]
-                    
-                    future_df = pd.DataFrame({
-                        'Date': future_dates[:10],
-                        'Predicted Value': result['future_predictions'][:10]
-                    })
-                    st.dataframe(future_df, use_container_width=True)
-                    
-                    # Download predictions
-                    full_future_df = pd.DataFrame({
-                        'Date': future_dates,
-                        'Predicted_Value': result['future_predictions']
-                    })
-                    csv = full_future_df.to_csv(index=False)
-                    st.download_button(
-                        label=f"📥 Download {model_name} Forecast",
-                        data=csv,
-                        file_name=f"{model_name}_forecast.csv",
-                        mime="text/csv"
-                    )
-
+                    ld = st.session_state.test.index[-1]
+                    fd = pd.date_range(ld, periods=st.session_state.horizon+1, freq=st.session_state.freq)[1:]
+                    fdf = pd.DataFrame({'Date': fd, 'Forecast': res['future']})
+                    st.dataframe(fdf, use_container_width=True)
+                    st.download_button(f"📥 Download {name}", fdf.to_csv(index=False), f"{name}_forecast.csv", "text/csv")
 else:
-    st.info("👈 Please upload a CSV file from the sidebar to begin forecasting.")
+    st.info("👈 Upload CSV to start")
     st.markdown("""
-    ### 📋 Instructions:
-    1. **Upload CSV**: Click 'Browse files' in the sidebar
-    2. **Select Columns**: Choose your date and value columns
-    3. **Configure**: Set forecast horizon and test size
-    4. **Choose Models**: Select which forecasting methods to use
-    5. **Run**: Click 'Run Forecasting' button
+    ### Quick Start:
+    1. Upload CSV with YYYYMM format (202301, 202302...)
+    2. Select date and value columns
+    3. Choose models from 25+ algorithms
+    4. Click Run Forecasting
     
-    ### 📅 Date Format Requirements:
-    - **YYYYMM format** (recommended): 202301, 202302, 202303, etc.
-    - Alternative formats: YYYY-MM-DD, YYYY-MM, MM/YYYY
-    - Ensure consistent date format throughout your CSV
-    - Monthly data works best with at least 24-36 months of history
-    
-    ### 📊 Available Models:
-    - **SARIMA**: Seasonal AutoRegressive Integrated Moving Average
-    - **Holt-Winters**: Exponential Smoothing with trend and seasonality
-    - **TBATS**: Trigonometric seasonality, Box-Cox transformation, ARMA errors, Trend and Seasonal components
-    - **Prophet**: Facebook's forecasting tool for time series with strong seasonal patterns
-    - **XGBoost**: Gradient boosting with engineered lag features
-    
-    ### 📈 Features:
-    - Train-test validation with customizable split
-    - Multiple accuracy metrics (RMSE, MAE, MAPE, MSE)
-    - Automatic best model recommendation
-    - Interactive visualizations
-    - Downloadable forecasts
+    ### Model Categories:
+    - **Statistical (12)**: Naive, ARIMA, SARIMA, Auto ARIMA, Holt-Winters, TBATS, Moving Averages
+    - **ML (7)**: Linear, Random Forest, XGBoost, LightGBM, CatBoost, GBM, Ensemble
+    - **DL (3)**: Facebook Prophet, Neural Prophet, LSTM
     """)
 
-# Footer
 st.markdown("---")
-st.markdown("Built with ❤️ using Streamlit | Advanced Time Series Forecasting Engine")
+st.markdown("Built with ❤️ | 25+ Forecasting Models")

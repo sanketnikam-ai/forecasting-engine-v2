@@ -1,281 +1,232 @@
 # Advanced Time Series Forecasting Engine
 
-A comprehensive Python-based forecasting application built with Streamlit that supports multiple forecasting methods with automatic model comparison and validation. **Optimized for monthly business data in YYYYMM format**.
+A comprehensive Python-based forecasting application with **25+ forecasting algorithms** built with Streamlit. Optimized for monthly business data in YYYYMM format.
 
 ## 🌟 Features
 
-- **Multiple Forecasting Methods**:
-  - SARIMA (Seasonal AutoRegressive Integrated Moving Average)
-  - Holt-Winters (Exponential Smoothing)
-  - TBATS (Trigonometric seasonality, Box-Cox, ARMA errors, Trend, Seasonal)
-  - Prophet (Facebook's forecasting tool)
-  - XGBoost (Gradient Boosting with engineered features)
+### 25+ Forecasting Algorithms
 
-- **YYYYMM Format Support**: Native support for YYYYMM date format (202301, 202302, etc.)
-- **Train-Test Validation**: Automatic split with customizable test size
-- **Model Comparison**: Side-by-side comparison with automatic best model recommendation
+**📊 Statistical Models (12):**
+- Naive Forecast
+- Seasonal Naive
+- Simple Moving Average (SMA)
+- Weighted Moving Average (WMA)
+- Exponential Smoothing (SES)
+- Holt-Winters (Triple Exponential Smoothing)
+- ARIMA
+- SARIMA
+- Auto ARIMA (automatic parameter selection)
+- ARIMAX (ARIMA with exogenous variables)
+- TBATS (Complex seasonal patterns)
+- Croston's Method (Intermittent demand)
+
+**🤖 Machine Learning Models (7):**
+- Linear Regression
+- Multilinear Regression
+- Random Forest
+- XGBoost
+- LightGBM
+- CatBoost
+- Gradient Boosting Machines (GBM)
+
+**🧠 Deep Learning Models (3):**
+- Facebook Prophet
+- Neural Prophet
+- LSTM (Long Short-Term Memory)
+
+**🎯 Ensemble:**
+- Ensemble Model (averages all successful models)
+
+### Additional Features:
+- **YYYYMM Format Support**: Native YYYYMM (202301, 202302) parsing
+- **Train-Test Validation**: Customizable test split
+- **Auto Model Selection**: Best model recommendation based on RMSE
 - **Multiple Metrics**: RMSE, MAE, MAPE, MSE
-- **Interactive Visualizations**: Using Plotly for dynamic charts
-- **CSV Upload**: Easy data import functionality
-- **Downloadable Results**: Export forecasts for each model
+- **Interactive Visualizations**: Plotly charts
+- **CSV Import/Export**: Easy data handling
+- **Organized UI**: Models grouped by category
 
 ## 📋 Requirements
 
 - Python 3.8+
-- See `requirements.txt` for all dependencies
+- See `requirements.txt` for dependencies
 
-## 🚀 Installation
+## 🚀 Quick Start
 
-### 1. Clone or Download
+### Installation
 
 ```bash
-git clone <your-repo-url>
+git clone <repository-url>
 cd forecasting_app
-```
 
-### 2. Create Virtual Environment (Recommended)
-
-```bash
+# Create virtual environment
 python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# On Windows
-venv\Scripts\activate
-
-# On macOS/Linux
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## 💻 Usage
-
-### Running the Application
+### Run
 
 ```bash
 streamlit run app.py
 ```
 
-The application will open in your default web browser at `http://localhost:8501`
+Open browser at `http://localhost:8501`
 
-### Using the App
+## 💻 Usage
 
-1. **Upload Data**:
-   - Click "Browse files" in the sidebar
-   - Upload a CSV file with time series data in YYYYMM format
-   - Your CSV should have two columns: month (YYYYMM) and value
+1. **Upload CSV**: YYYYMM format (202301, 202302, ...)
+2. **Select Columns**: Date and value columns
+3. **Choose Models**: From 25+ algorithms
+4. **Configure**: Forecast horizon and test size
+5. **Run**: Click "Run Forecasting"
+6. **Analyze**: View results, compare models, download forecasts
 
-2. **Configure Settings**:
-   - Select the date column from your data
-   - Select the value column to forecast
-   - Set forecast horizon (number of future months)
-   - Set test size (percentage for validation)
+## 📊 Data Format
 
-3. **Choose Models**:
-   - Select which forecasting methods to use
-   - Configure advanced parameters if needed
-
-4. **Run Forecast**:
-   - Click "Run Forecasting" button
-   - Wait for models to train and validate
-   - View results in multiple tabs
-
-5. **Analyze Results**:
-   - **Data Overview**: See your data and statistics
-   - **Forecasts**: View individual model predictions
-   - **Model Comparison**: Compare all models side-by-side
-   - **Detailed Results**: Download forecasts and see detailed metrics
-
-## 📊 Sample Data Format
-
-Your CSV file should look like this (monthly data in YYYYMM format):
-
+### YYYYMM Format (Recommended):
 ```csv
 month,sales
 202301,12450
 202302,13200
 202303,14100
-202304,13800
-...
 ```
 
-**Supported Date Formats:**
-- **YYYYMM** (recommended): 202301, 202302, 202303, etc.
-- YYYY-MM-DD: 2023-01-01, 2023-02-01, etc.
-- YYYY-MM: 2023-01, 2023-02, etc.
-- MM/YYYY: 01/2023, 02/2023, etc.
+### Also Supports:
+- YYYY-MM-DD: 2023-01-01
+- YYYY-MM: 2023-01
+- MM/YYYY: 01/2023
 
-The application will automatically detect and parse your date format.
+## 🎯 Model Categories
 
-## 🔧 Configuration Options
+### When to Use Each Category:
 
-### Forecasting Parameters
-- **Forecast Horizon**: 1-60 periods (default: 12) - Number of future periods to forecast
-- **Test Size**: 10-40% of data (default: 20%) - Portion of data used for validation
+**Statistical Models** - Best for:
+- Clear seasonal patterns
+- Traditional time series analysis
+- Interpretability needed
+- Smaller datasets
 
-### Model-Specific Settings
-- **SARIMA**: Customize order (p,d,q) and seasonal order (P,D,Q,s)
-  - For monthly data: typical seasonal period s=12
-- **Prophet**: Choose additive or multiplicative seasonality
+**Machine Learning** - Best for:
+- Non-linear patterns
+- Multiple features/variables
+- Complex relationships
+- Larger datasets
 
-### Data Frequency
-The application automatically detects your data frequency:
-- Monthly data (most common for YYYYMM format)
-- Daily data
-- Weekly data
-- Quarterly data
+**Deep Learning** - Best for:
+- Very large datasets
+- Complex seasonal patterns
+- Long-term dependencies
+- Trend changes
+
+**Ensemble** - Best for:
+- Combining multiple approaches
+- Reducing model risk
+- Improving robustness
 
 ## 📈 Metrics Explained
 
-- **RMSE (Root Mean Square Error)**: Square root of average squared differences - penalizes large errors
-- **MAE (Mean Absolute Error)**: Average absolute differences - easy to interpret
-- **MAPE (Mean Absolute Percentage Error)**: Average percentage error - scale-independent
-- **MSE (Mean Squared Error)**: Average squared differences - emphasizes large errors
+- **RMSE**: Root Mean Squared Error (lower is better)
+- **MAE**: Mean Absolute Error (lower is better)
+- **MAPE**: Mean Absolute Percentage Error (lower is better)
+- **MSE**: Mean Squared Error (lower is better)
 
-Lower values indicate better model performance.
+## 🔧 Configuration
 
-## 🏆 Model Selection
+### Forecast Parameters:
+- **Horizon**: 1-60 periods (default: 12 months)
+- **Test Size**: 10-40% (default: 20%)
 
-The application automatically recommends the best model based on RMSE (Root Mean Square Error). The model with the lowest RMSE on the test set is highlighted as the recommended model.
-
-## 🎯 Model Characteristics
-
-### SARIMA
-- **Best for**: Data with clear seasonal patterns
-- **Strengths**: Statistical rigor, interpretable parameters
-- **Weaknesses**: Requires stationary data, sensitive to outliers
-
-### Holt-Winters
-- **Best for**: Data with trend and seasonality
-- **Strengths**: Simple, fast, handles multiplicative seasonality
-- **Weaknesses**: Limited flexibility, assumes constant patterns
-
-### TBATS
-- **Best for**: Complex seasonality (multiple seasonal periods)
-- **Strengths**: Handles multiple seasonalities, automatic parameter selection
-- **Weaknesses**: Computationally intensive, can overfit
-
-### Prophet
-- **Best for**: Monthly data with strong seasonal patterns
-- **Strengths**: Robust to missing data, handles outliers well
-- **Weaknesses**: May not work well for all business data
-
-### XGBoost
-- **Best for**: Complex non-linear patterns
-- **Strengths**: Captures complex relationships, handles multiple features
-- **Weaknesses**: Requires feature engineering, less interpretable
+### Advanced Options:
+- Individual model selection
+- Category-based selection
+- Ensemble configuration
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+### Installation Issues:
+```bash
+# If Prophet fails
+pip install pystan==2.19.1.1
+pip install prophet
 
-1. **Import Errors**: Make sure all dependencies are installed
-   ```bash
-   pip install -r requirements.txt
-   ```
+# If TensorFlow/LSTM fails
+pip install tensorflow==2.13.0
+```
 
-2. **Date Parsing Issues**: Ensure your date column is in YYYYMM format (202301, 202302, etc.)
-
-3. **Memory Issues**: For large datasets, reduce the test size or forecast horizon
-
-4. **Model Failures**: Some models may fail for certain datasets. The app will skip failed models and continue with others.
-
-5. **Prophet Installation Issues**: If Prophet fails to install:
-   ```bash
-   pip install pystan==2.19.1.1
-   pip install prophet
-   ```
+### Model Failures:
+- Some models may fail on certain datasets
+- App will skip failed models and continue
+- At least basic models (Naive, SMA) should work
 
 ## 📦 Deployment
 
-### Deploy to Streamlit Cloud
+### Streamlit Cloud:
+1. Push to GitHub
+2. Connect at share.streamlit.io
+3. Deploy
 
-1. Push your code to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your repository
-4. Deploy!
-
-### Deploy to Heroku
-
-1. Ensure `Procfile` and `setup.sh` are in your repository
-2. Deploy using Heroku CLI:
-   ```bash
-   heroku create
-   git push heroku main
-   ```
-
-### Required Files for Deployment
-- `app.py` - Main application
-- `requirements.txt` - Python dependencies
-- `packages.txt` - System dependencies (for Streamlit Cloud)
-- `Procfile` - For Heroku deployment
-- `setup.sh` - Setup script for Heroku
+### Heroku:
+```bash
+heroku create
+git push heroku main
+```
 
 ## 📂 Project Structure
 
 ```
 forecasting_app/
-│
-├── app.py                      # Main Streamlit application
-├── requirements.txt            # Python dependencies
-├── packages.txt               # System dependencies
-├── README.md                  # This file
-├── QUICKSTART.md              # Quick start guide
-├── DATA_FORMAT_GUIDE.md       # Date format conversion guide
-├── sample_data.csv            # Sample dataset (YYYYMM format)
-├── Procfile                   # Heroku deployment config
-├── setup.sh                   # Setup script
-├── .gitignore                # Git ignore file
-├── LICENSE                    # MIT License
-├── CONTRIBUTING.md            # Contribution guidelines
+├── app.py                    # Main application (25+ models)
+├── requirements.txt          # Python dependencies
+├── packages.txt              # System dependencies
+├── sample_data.csv           # Sample YYYYMM data
+├── README.md                 # Documentation
+├── QUICKSTART.md             # Quick guide
+├── DATA_FORMAT_GUIDE.md      # Format conversion
+├── .gitignore               # Git ignore
+├── LICENSE                   # MIT License
+├── CONTRIBUTING.md           # Contribution guide
 └── .streamlit/
-    └── config.toml            # Streamlit configuration
+    └── config.toml           # Streamlit config
 ```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. See CONTRIBUTING.md for guidelines.
+Contributions welcome! See CONTRIBUTING.md
 
 ## 📄 License
 
-This project is open source and available under the MIT License.
+MIT License - see LICENSE file
 
-## 👨‍💻 Author
+## 👨‍💻 Support
 
-Created with ❤️ for time series forecasting enthusiasts
+- Issues: GitHub Issues
+- Documentation: README.md, QUICKSTART.md
+- Format Guide: DATA_FORMAT_GUIDE.md
 
 ## 🙏 Acknowledgments
 
-- Streamlit for the amazing framework
+- Streamlit
 - Facebook Prophet team
 - Statsmodels contributors
-- XGBoost developers
-- TBATS package maintainers
+- XGBoost, LightGBM, CatBoost developers
+- TensorFlow team
+- pmdarima (Auto ARIMA)
+- TBATS package
 
-## 📞 Support
+## 🔄 Version
 
-For issues, questions, or suggestions, please open an issue on GitHub.
+**Version 2.0.0** - 25+ Algorithms Edition
 
-## 🔄 Updates & Roadmap
-
-### Current Version: 1.0.0
-- ✅ 5 forecasting models
+### Changelog:
+- ✅ 25+ forecasting models
 - ✅ YYYYMM format support
-- ✅ Train-test validation
-- ✅ Model comparison
-- ✅ Interactive visualizations
-- ✅ CSV upload/download
-
-### Future Enhancements
-- [ ] Support for multiple time series
-- [ ] Advanced ensemble methods
-- [ ] Automatic hyperparameter tuning
-- [ ] More data preprocessing options
-- [ ] Export to Excel with charts
-- [ ] API endpoint for predictions
+- ✅ Organized UI (Statistical/ML/DL categories)
+- ✅ Auto ARIMA
+- ✅ Ensemble methods
+- ✅ Comprehensive error handling
 
 ---
 
